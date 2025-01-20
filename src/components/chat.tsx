@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, AlertCircle } from 'lucide-react';
@@ -47,7 +47,11 @@ const MarkdownComponents: Components = {
   ),
 };
 
-export function Chat() {
+export interface ChatRef {
+  handleUrlSummary: (url: string) => void;
+}
+
+export const Chat = forwardRef<ChatRef>((props, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -105,6 +109,50 @@ export function Chat() {
       setIsLoading(false);
     }
   };
+
+  const handleUrlSummary = async (url: string) => {
+    const prompt = `generate a massive summary of ${url}`;
+    const userMessage: Message = { role: 'user', content: prompt };
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          messages: [...messages, userMessage],
+          stream: true
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to get response from AI');
+      }
+
+      const data = await response.json();
+      if (data.choices && data.choices[0]?.message) {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.choices[0].message.content
+        };
+        setMessages(prevMessages => [...prevMessages, assistantMessage]);
+      } else {
+        throw new Error('Invalid response format from AI');
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    handleUrlSummary
+  }));
 
   return (
     <div className="flex flex-col h-full">
@@ -184,4 +232,4 @@ export function Chat() {
       </div>
     </div>
   );
-}
+});
