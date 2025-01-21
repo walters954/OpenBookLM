@@ -88,4 +88,7 @@ yarn-error.log*
 # local helper files
 commands.sh
 links
-backend/
+
+# cache files
+__pycache__
+*.pyc
