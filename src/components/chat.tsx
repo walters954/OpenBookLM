@@ -67,200 +67,284 @@ export interface ChatRef {
 
 interface ChatProps {
   notebookId: string;
+  initialMessages?: Message[];
 }
 
-export const Chat = forwardRef<ChatRef, ChatProps>(({ notebookId }, ref) => {
-  const { userId } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export const Chat = forwardRef<ChatRef, ChatProps>(
+  ({ notebookId, initialMessages = [] }, ref) => {
+    const { userId } = useAuth();
+    const [messages, setMessages] = useState<Message[]>(initialMessages);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [debugInfo, setDebugInfo] = useState<any>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    const loadChatHistory = async () => {
+      if (!userId || !notebookId) return;
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+      try {
+        console.log("Loading chat history for:", { userId, notebookId });
+        const response = await fetch(
+          `/api/chat/history?notebookId=${notebookId}`
+        );
 
-  // Load chat history on component mount
-  useEffect(() => {
-    if (userId) {
-      const loadHistory = async () => {
-        const history = await getChatHistory(userId, notebookId);
-        if (history.length > 0) {
+        if (!response.ok) throw new Error("Failed to load chat history");
+
+        const history = await response.json();
+        setDebugInfo({
+          key: `chat:${userId}:${notebookId}`,
+          historyLength: history?.length || 0,
+          history: history,
+        });
+
+        if (history && history.length > 0) {
           setMessages(history);
+          console.log("Loaded messages:", history);
         }
-      };
-      loadHistory();
-    }
-  }, [userId, notebookId]);
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+        setError("Failed to load chat history");
+      }
+    };
 
-  // Save messages to Redis whenever they change
-  useEffect(() => {
-    if (userId && messages.length > 0) {
-      setChatHistory(userId, notebookId, messages);
-    }
-  }, [messages, userId, notebookId]);
+    const saveChatHistory = async (messages: Message[]) => {
+      if (!userId || !notebookId || messages.length === 0) return;
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    setError(null);
+      try {
+        const response = await fetch("/api/chat/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, notebookId }),
+        });
+        s;
+        if (!response.ok) throw new Error("Failed to save chat history");
+      } catch (error) {
+        console.error("Error saving chat history:", error);
+      }
+    };
 
-    const userMessage: Message = { role: "user", content: input.trim() };
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
-    setInput("");
-    setIsLoading(true);
+    useEffect(() => {
+      loadChatHistory();
+    }, [userId, notebookId]);
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          stream: true,
-        }),
-      });
+    useEffect(() => {
+      saveChatHistory(messages);
+    }, [messages, userId, notebookId]);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to get response from AI");
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [input, setInput] = useState("");
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+    // Single useEffect for loading chat history
+    useEffect(() => {
+      async function loadChatHistory() {
+        if (!userId || !notebookId) return;
+
+        try {
+          setIsLoadingHistory(true);
+          const history = await getChatHistory(userId, notebookId);
+          if (history && history.length > 0) {
+            setMessages(history);
+          }
+        } catch (error) {
+          console.error("Failed to load chat history:", error);
+          setError("Failed to load chat history");
+        } finally {
+          setIsLoadingHistory(false);
+        }
       }
 
-      const data = await response.json();
-      if (data.choices && data.choices[0]?.message) {
-        const assistantMessage: Message = {
-          role: "assistant",
-          content: data.choices[0].message.content,
-        };
-        setMessages((prevMessages) => [...prevMessages, assistantMessage]);
-      } else {
-        throw new Error("Invalid response format from AI");
+      loadChatHistory();
+    }, [userId, notebookId]);
+
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+      scrollToBottom();
+    }, [messages]);
+
+    const sendMessage = async () => {
+      if (!input.trim() || !userId) return;
+      setError(null);
+
+      const userMessage: Message = { role: "user", content: input.trim() };
+      setMessages((prevMessages) => [...prevMessages, userMessage]);
+      setInput("");
+      setIsLoading(true);
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: [...messages, userMessage],
+            notebookId, // Add notebookId to the request
+            stream: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to get response from AI");
+        }
+
+        const data = await response.json();
+        if (data.choices && data.choices[0]?.message) {
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: data.choices[0].message.content,
+          };
+          setMessages((prevMessages) => [...prevMessages, assistantMessage]);
+        } else {
+          throw new Error("Invalid response format from AI");
+        }
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : "An error occurred while sending your message"
+        );
+        console.error("Chat error:", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "An error occurred while sending your message"
-      );
-      console.error("Chat error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  const handleUrlSummary = async (url: string) => {
-    const prompt = `generate a massive summary of ${url}`;
-    const userMessage: Message = { role: "user", content: prompt };
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
-    setIsLoading(true);
+    const handleUrlSummary = async (url: string) => {
+      const prompt = `generate a massive summary of ${url}`;
+      const userMessage: Message = { role: "user", content: prompt };
+      setMessages((prevMessages) => [...prevMessages, userMessage]);
+      setIsLoading(true);
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          stream: true,
-        }),
-      });
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: [...messages, userMessage],
+            stream: true,
+          }),
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to get response from AI");
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to get response from AI");
+        }
+
+        const data = await response.json();
+        if (data.choices && data.choices[0]?.message) {
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: data.choices[0].message.content,
+          };
+          setMessages((prevMessages) => [...prevMessages, assistantMessage]);
+        } else {
+          throw new Error("Invalid response format from AI");
+        }
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "An error occurred");
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      const data = await response.json();
-      if (data.choices && data.choices[0]?.message) {
-        const assistantMessage: Message = {
-          role: "assistant",
-          content: data.choices[0].message.content,
-        };
-        setMessages((prevMessages) => [...prevMessages, assistantMessage]);
-      } else {
-        throw new Error("Invalid response format from AI");
-      }
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    useImperativeHandle(ref, () => ({
+      handleUrlSummary,
+    }));
 
-  useImperativeHandle(ref, () => ({
-    handleUrlSummary,
-  }));
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${
-              message.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            <div
-              className={`max-w-[80%] rounded-lg p-3 ${
-                message.role === "user"
-                  ? "bg-blue-600 text-white"
-                  : message.role === "system"
-                  ? "bg-yellow-600 text-white"
-                  : "bg-gray-700 text-white"
-              }`}
-            >
-              {message.role === "assistant" ? (
-                <div className="prose prose-invert max-w-none">
-                  <ReactMarkdown components={MarkdownComponents}>
-                    {message.content}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                message.content
-              )}
-            </div>
+    return (
+      <div className="flex flex-col h-full">
+        {process.env.NODE_ENV === "development" && debugInfo && (
+          <div className="p-4 bg-gray-800 text-xs">
+            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
           </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-lg p-3 bg-gray-700 text-white">
-              <div className="flex items-center space-x-2">
-                <div className="animate-pulse">Thinking</div>
-                <div className="flex space-x-1">
-                  <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.2s]"></div>
-                  <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.1s]"></div>
-                </div>
+        )}
+        {isLoadingHistory ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="flex items-center space-x-2">
+              <div className="animate-pulse">Loading chat history</div>
+              <div className="flex space-x-1">
+                <div className="w-1 h-1 bg-white rounded-full animate-bounce"></div>
+                <div className="w-1 h-1 bg-white rounded-full animate-bounce"></div>
+                <div className="w-1 h-1 bg-white rounded-full animate-bounce"></div>
               </div>
             </div>
           </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg p-3 ${
+                      message.role === "user"
+                        ? "bg-blue-600 text-white"
+                        : message.role === "system"
+                        ? "bg-yellow-600 text-white"
+                        : "bg-gray-700 text-white"
+                    }`}
+                  >
+                    {message.role === "assistant" ? (
+                      <div className="prose prose-invert max-w-none">
+                        <ReactMarkdown components={MarkdownComponents}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      message.content
+                    )}
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-lg p-3 bg-gray-700 text-white">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-pulse">Thinking</div>
+                      <div className="flex space-x-1">
+                        <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                        <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.2s]"></div>
+                        <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.1s]"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {error && (
+                <Alert
+                  variant="destructive"
+                  className="bg-red-900 border-red-800"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="border-t border-[#2A2A2A] p-4">
+              <ChatInput
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Type your message here..."
+                onSend={sendMessage}
+                isLoading={isLoading}
+              />
+            </div>
+          </>
         )}
-        {error && (
-          <Alert variant="destructive" className="bg-red-900 border-red-800">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        <div ref={messagesEndRef} />
       </div>
-      <div className="border-t border-[#2A2A2A] p-4">
-        <ChatInput
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message here..."
-          onSend={sendMessage}
-          isLoading={isLoading}
-        />
-      </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
 Chat.displayName = "Chat";

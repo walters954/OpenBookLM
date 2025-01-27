@@ -112,41 +112,68 @@ export async function setChatHistory(
   notebookId: string,
   messages: any[]
 ) {
+  const startTime = performance.now();
+  if (!userId || !notebookId) {
+    console.error("Missing required parameters:", { userId, notebookId });
+    return;
+  }
+
   try {
     const redis = getRedisClient();
     if (!redis) return;
 
     const key = `chat:${userId}:${notebookId}`;
-    const jsonString = JSON.stringify(messages);
-    console.log("Storing messages:", { key, jsonString });
-    await redis.set(key, jsonString);
-    // Set expiration to 24 hours
-    await redis.expire(key, 60 * 60 * 24);
+    // Ensure messages are serializable
+    const sanitizedMessages = messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+    const jsonString = JSON.stringify(sanitizedMessages);
+
+    console.log("Storing messages:", { key, count: messages.length });
+    await redis
+      .pipeline()
+      .set(key, jsonString)
+      .expire(key, 60 * 60 * 24) // 24 hours
+      .exec();
+
+    const endTime = performance.now();
+    console.log(
+      `Redis set operation took ${endTime - startTime}ms for key: ${key}`
+    );
   } catch (error) {
     console.error("Error in setChatHistory:", error);
-    throw error;
   }
 }
 
 export async function getChatHistory(userId: string, notebookId: string) {
+  const startTime = performance.now();
   try {
     const redis = getRedisClient();
     if (!redis) return;
     const key = `chat:${userId}:${notebookId}`;
     const history = await redis.get(key);
-    console.log("Retrieved history:", { key, history, type: typeof history });
+    const endTime = performance.now();
 
-    if (!history) return [];
+    console.log(
+      `Redis get operation took ${endTime - startTime}ms for key: ${key}`
+    );
 
+    if (!history) {
+      console.log("No history found for key:", key);
+      return [];
+    }
+
+    // If it's already an object (some Redis clients auto-parse)
     if (typeof history === "object") {
       return history;
     }
 
+    // Parse string response
     try {
       return JSON.parse(history as string);
     } catch (parseError) {
       console.error("Error parsing chat history:", parseError);
-      console.error("Raw history:", history);
       return [];
     }
   } catch (error) {
@@ -164,6 +191,48 @@ export async function clearChatHistory(userId: string, notebookId: string) {
   } catch (error) {
     console.error("Error in clearChatHistory:", error);
     throw error;
+  }
+}
+
+export async function setSources(
+  userId: string,
+  notebookId: string,
+  sources: any[]
+) {
+  try {
+    const key = `sources:${userId}:${notebookId}`;
+    const jsonString = JSON.stringify(sources);
+    console.log("Storing sources:", { key, count: sources.length });
+    await redis.set(key, jsonString);
+    await redis.expire(key, 60 * 60 * 24 * 7); // 7 days expiration
+  } catch (error) {
+    console.error("Error in setSources:", error);
+    // Don't throw, just log the error to prevent UI crashes
+  }
+}
+
+export async function getSources(userId: string, notebookId: string) {
+  try {
+    const key = `sources:${userId}:${notebookId}`;
+    const sources = await redis.get(key);
+    console.log("Retrieved sources:", { key, type: typeof sources });
+
+    if (!sources) return [];
+
+    if (typeof sources === "object") {
+      return sources;
+    }
+
+    try {
+      return JSON.parse(sources as string);
+    } catch (parseError) {
+      console.error("Error parsing sources:", parseError);
+      console.error("Raw sources:", sources);
+      return [];
+    }
+  } catch (error) {
+    console.error("Error in getSources:", error);
+    return [];
   }
 }
 
@@ -250,15 +319,20 @@ export async function getAllNotebooks(userId: string) {
     if (typeof notebooks === "object") {
       return notebooks;
     }
-
-    try {
-      return JSON.parse(notebooks as string);
-    } catch (parseError) {
-      console.error("Error parsing notebooks:", parseError);
-      return null;
-    }
   } catch (error) {
     console.error("Error in getAllNotebooks:", error);
-    return null;
+
+    return JSON.parse(notebooks as string);
+  }
+}
+export async function checkRedisConnection() {
+  try {
+    const redis = getRedisClient();
+    if (!redis) return false;
+    await redis.ping();
+    return true;
+  } catch (error) {
+    console.error("Redis connection check failed:", error);
+    return false;
   }
 }

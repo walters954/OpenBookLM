@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const { url } = await req.json();
-
+    // @ Temp will be calling to morgan to log the url
     const response = await fetch(url);
     const content = await response.text();
 
