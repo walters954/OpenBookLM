@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import Cerebras from '@cerebras/cerebras_cloud_sdk';
 
-if (!process.env.CEREBRAS_API_KEY) {
-  throw new Error('Missing CEREBRAS_API_KEY environment variable');
-}
-
-const client = new Cerebras({
-  apiKey: process.env.CEREBRAS_API_KEY,
-});
+const getClient = () => {
+  if (!process.env.CEREBRAS_API_KEY) {
+    throw new Error('Missing CEREBRAS_API_KEY environment variable');
+  }
+  return new Cerebras({
+    apiKey: process.env.CEREBRAS_API_KEY,
+  });
+};
 
 export async function POST(req: Request) {
   try {
@@ -21,12 +22,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const client = getClient();
+
     const completionResponse = await client.chat.completions.create({
       messages: messages.map(msg => ({
         role: msg.role,
         content: msg.content,
       })),
-      model: 'llama3.1-70b',
+      model: 'llama3.3-70b',
       temperature: 0.7,
       max_tokens: 1000,
     });
