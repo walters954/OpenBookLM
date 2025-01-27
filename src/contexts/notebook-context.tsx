@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect } from "react";
-import { getUserNotebook, setUserNotebook } from "@/lib/redis-utils";
 import { useAuth } from "@clerk/nextjs";
 import type { Notebook, Source, Chat, Note } from "@prisma/client";
 
@@ -31,24 +30,40 @@ export function NotebookProvider({
   const [notebook, setNotebook] =
     useState<NotebookWithRelations>(initialNotebook);
 
-  // Load notebook from Redis on mount
+  // Load notebook from API on mount
   useEffect(() => {
     if (userId) {
       const loadNotebook = async () => {
-        const cached = await getUserNotebook(userId, initialNotebook.id);
-        if (cached) {
-          setNotebook(cached);
+        try {
+          const response = await fetch(`/api/notebooks/${initialNotebook.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setNotebook(data);
+          }
+        } catch (error) {
+          console.error("Error loading notebook:", error);
         }
       };
       loadNotebook();
     }
   }, [userId, initialNotebook.id]);
 
-  // Save notebook to Redis whenever it changes
+  // Save notebook through API whenever it changes
   const updateNotebook = async (updatedNotebook: NotebookWithRelations) => {
     if (userId) {
-      setNotebook(updatedNotebook);
-      await setUserNotebook(userId, updatedNotebook.id, updatedNotebook);
+      try {
+        const response = await fetch(`/api/notebooks/${updatedNotebook.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedNotebook),
+        });
+
+        if (response.ok) {
+          setNotebook(updatedNotebook);
+        }
+      } catch (error) {
+        console.error("Error updating notebook:", error);
+      }
     }
   };
 

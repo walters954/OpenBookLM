@@ -3,7 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Grid2X2, List, MoreVertical, Plus } from "lucide-react";
+import {
+  Grid2X2,
+  List,
+  MoreVertical,
+  PanelLeftClose,
+  PanelRightClose,
+} from "lucide-react";
 import { CreateNotebookDialog } from "@/components/create-notebook-dialog";
 import { Card } from "@/components/ui/card";
 
@@ -20,6 +26,8 @@ export default function HomePage({
   notebooks: Notebook[];
 }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
 
   const getNotebookEmoji = (notebook: Notebook) => {
     if (notebook.title.includes("Introduction")) return "👋";
@@ -27,13 +35,47 @@ export default function HomePage({
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-56px)] ">
-      <div className="p-12 ml-28 mr-8 mt-28">
+    <div className="flex flex-col min-h-[calc(100vh-56px)]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#2A2A2A]">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+            className="text-gray-400 hover:text-white"
+          >
+            <PanelLeftClose
+              className={`h-4 w-4 transition-all ${
+                leftSidebarOpen ? "" : "rotate-180"
+              }`}
+            />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+            className="text-gray-400 hover:text-white"
+          >
+            <PanelRightClose
+              className={`h-4 w-4 transition-all ${
+                rightSidebarOpen ? "" : "rotate-180"
+              }`}
+            />
+          </Button>
+        </div>
+      </div>
+
+      <div
+        className={`p-12 transition-all duration-300 
+        ${leftSidebarOpen ? "ml-28" : "ml-0"} 
+        ${rightSidebarOpen ? "mr-8" : "mr-0"} 
+        mt-28`}
+      >
         <div className="flex items-center justify-between mb-6">
           <h1
             className="text-[60px] leading-[1.2] font-[500] font-['Google_Sans','Helvetica_Neue',sans-serif] 
             bg-gradient-to-r from-[#3882f6] via-[#328fb7] via-[#2e9a80] to-[#2e9a80] 
-            inline-block text-transparent bg-clip-text "
+            inline-block text-transparent bg-clip-text"
           >
             Welcome to OpenBookLM
           </h1>
@@ -91,7 +133,7 @@ export default function HomePage({
                       className="group border-t border-[#2A2A2A] hover:bg-[#2A2A2A]"
                     >
                       <td className="py-3">
-                        <Link href={`/notebooks/${notebook.id}`}>
+                        <Link href={`/notebook/${notebook.id}`}>
                           <div className="flex items-center">
                             <span className="mr-2">
                               {getNotebookEmoji(notebook)}
@@ -123,7 +165,7 @@ export default function HomePage({
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {initialNotebooks.map((notebook) => (
-                <Link key={notebook.id} href={`/notebooks/${notebook.id}`}>
+                <Link key={notebook.id} href={`/notebook/${notebook.id}`}>
                   <Card className="aspect-[1.4/1] p-6 hover:bg-[#2A2A2A] transition-colors border-[#333333] bg-[#1E1E1E] group relative">
                     <div className="flex flex-col h-full">
                       <div className="mb-2">
