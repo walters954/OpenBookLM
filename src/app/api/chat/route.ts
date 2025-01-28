@@ -1,4 +1,4 @@
-import { redis } from "@/lib/redis";
+import { getRedisClient } from "@/lib/redis";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
