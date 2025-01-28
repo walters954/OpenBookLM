@@ -103,7 +103,7 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
 
       toast.success("Notebook created successfully");
       router.refresh();
-      router.push(`/notebooks/${notebook.id}`);
+      router.push(`/notebook/${notebook.id}`);
     } catch (error) {
       console.error("Error creating notebook:", error);
       toast.error("Failed to create notebook");

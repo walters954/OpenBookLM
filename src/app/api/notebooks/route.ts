@@ -9,10 +9,10 @@ export async function GET() {
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
-
+    const user = await getOrCreateUser();
     const notebooks = await prisma.notebook.findMany({
       where: {
-        userId: userId,
+        userId: user?.id,
       },
       include: {
         chats: true,
@@ -47,8 +47,7 @@ export async function POST(req: Request) {
     const notebook = await prisma.notebook.create({
       data: {
         title,
-        // TODO: Remove this temporary userId once auth is re-enabled
-        userId: "temp_user_id", // Temporary user ID for development
+        userId: user?.id,
       },
     });
 
