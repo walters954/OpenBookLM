@@ -1,4 +1,4 @@
-import { redis } from "@/lib/redis";
+import redis, { getRedisClient } from "@/lib/redis";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -17,6 +17,11 @@ export async function GET(req: Request) {
 
     const key = `chat:${userId}:${notebookId}`;
     console.log("Fetching chat history for key:", key); // Debug log
+
+    const redis = getRedisClient();
+    if (!redis) {
+      return new NextResponse("Redis connection failed", { status: 500 });
+    }
 
     const history = await redis.get(key);
     console.log("Raw history from Redis:", history); // Debug log
@@ -37,6 +42,10 @@ export async function POST(req: Request) {
 
     const { messages, notebookId } = await req.json();
     const key = `chat:${userId}:${notebookId}`;
+    const redis = getRedisClient();
+    if (!redis) {
+      return new NextResponse("Redis connection failed", { status: 500 });
+    }
     await redis.set(key, JSON.stringify(messages));
     await redis.expire(key, 60 * 60 * 24); // 24 hours
 
