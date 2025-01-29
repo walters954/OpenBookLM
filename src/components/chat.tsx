@@ -115,7 +115,7 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages, notebookId }),
         });
-        s;
+
         if (!response.ok) throw new Error("Failed to save chat history");
       } catch (error) {
         console.error("Error saving chat history:", error);
