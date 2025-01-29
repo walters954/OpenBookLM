@@ -35,6 +35,13 @@ interface CreateNotebookDialogProps {
   children?: React.ReactNode;
 }
 
+interface UploadProgress {
+  [key: string]: {
+    progress: number;
+    status: "uploading" | "processing" | "complete" | "error";
+  };
+}
+
 export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [showPasteText, setShowPasteText] = useState(false);
@@ -46,6 +53,7 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const router = useRouter();
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({});
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles((prev) => [...prev, ...acceptedFiles]);
@@ -91,15 +99,15 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
         formData.append("files", file);
       });
 
-      //   const uploadResponse = await fetch(
-      //     `/api/notebooks/${notebook.id}/sources`,
-      //     {
-      //       method: "POST",
-      //       body: formData,
-      //     }
-      //   );
+      const uploadResponse = await fetch(
+        `/api/notebooks/${notebook.id}/sources`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
-      //   if (!uploadResponse.ok) throw new Error("Failed to upload sources");
+      if (!uploadResponse.ok) throw new Error("Failed to upload sources");
 
       toast.success("Notebook created successfully");
       router.refresh();

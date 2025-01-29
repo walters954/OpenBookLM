@@ -65,3 +65,42 @@ export async function GET(req: Request) {
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const { messages, notebookId } = await req.json();
+    if (!notebookId || !Array.isArray(messages)) {
+      return new NextResponse("Invalid request data", { status: 400 });
+    }
+
+    // Save to database first
+    await prisma.chat.create({
+      data: {
+        notebookId,
+        messages: {
+          create: messages.map((msg) => ({
+            role: msg.role.toUpperCase(),
+            content: msg.content,
+          })),
+        },
+      },
+    });
+
+    // Then cache in Redis
+    const key = `chat:${userId}:${notebookId}`;
+    const redis = getRedisClient();
+    if (redis) {
+      await redis.set(key, JSON.stringify(messages), "EX", 60 * 60 * 24); // 24 hours
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[CHAT_HISTORY_POST]", error);
+    return new NextResponse("Internal Error", { status: 500 });
+  }
+}

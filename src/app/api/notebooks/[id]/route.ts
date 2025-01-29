@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getRedisClient } from "@/lib/redis";
-
+import { prisma } from "@/lib/db";
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -16,10 +16,32 @@ export async function GET(
     if (!redis) {
       return new NextResponse("Redis connection failed", { status: 500 });
     }
+    try {
+      const notebook = await prisma.notebook.findUnique({
+        where: {
+          id: params.id,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          createdAt: true,
+          updatedAt: true,
+          sources: {
+            select: {
+              content: true,
+            },
+          },
+        },
+      });
+      console.log("NOTEBOOK", notebook);
+      return NextResponse.json(notebook);
+    } catch (error) {
+      console.error("[NOTEBOOK_GET]", error);
+      return new NextResponse("Internal Error", { status: 500 });
+    }
 
-    const key = `notebook:${userId}:${params.id}`;
-    const notebook = await redis.get(key);
-    return NextResponse.json(notebook ? JSON.parse(notebook as string) : null);
+    // const notebook = await redis.get(key);
   } catch (error) {
     console.error("[NOTEBOOK_GET]", error);
     return new NextResponse("Internal Error", { status: 500 });
