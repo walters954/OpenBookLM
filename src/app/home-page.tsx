@@ -36,35 +36,6 @@ export default function HomePage({
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-56px)]">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[#2A2A2A]">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-            className="text-gray-400 hover:text-white"
-          >
-            <PanelLeftClose
-              className={`h-4 w-4 transition-all ${
-                leftSidebarOpen ? "" : "rotate-180"
-              }`}
-            />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-            className="text-gray-400 hover:text-white"
-          >
-            <PanelRightClose
-              className={`h-4 w-4 transition-all ${
-                rightSidebarOpen ? "" : "rotate-180"
-              }`}
-            />
-          </Button>
-        </div>
-      </div>
-
       <div
         className={`p-12 transition-all duration-300 
         ${leftSidebarOpen ? "ml-28" : "ml-0"} 
