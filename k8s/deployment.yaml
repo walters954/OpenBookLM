@@ -24,6 +24,8 @@ spec:
             name: openbooklm-config
         - secretRef:
             name: openbooklm-secrets
+        - secretRef:
+            name: clerk-credentials
         resources:
           requests:
             cpu: "100m"
