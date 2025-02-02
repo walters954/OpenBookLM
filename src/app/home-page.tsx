@@ -12,12 +12,16 @@ import {
 } from "lucide-react";
 import { CreateNotebookDialog } from "@/components/create-notebook-dialog";
 import { Card } from "@/components/ui/card";
+import { ShareDialog } from "@/components/share-dialog";
 
 interface Notebook {
   id: string;
   title: string;
   sources: any[];
   updatedAt: string;
+  role: string;
+  ownerName: string;
+  userId: string;
 }
 
 export default function HomePage({
@@ -88,42 +92,65 @@ export default function HomePage({
 
           {viewMode === "list" ? (
             <div className="list-view">
-              <table className="w-full">
+              <table className="w-full border-separate border-spacing-0">
                 <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Sources</th>
-                    <th>Last modified</th>
-                    <th></th>
+                  <tr className="text-gray-400 text-sm">
+                    <th className="text-left font-medium py-2 px-4">Title</th>
+                    <th className="text-left font-medium w-32 py-2 px-4">
+                      Sources
+                    </th>
+                    <th className="text-left font-medium w-40 py-2 px-4">
+                      Created
+                    </th>
+                    <th className="text-left font-medium w-24 py-2 px-4">
+                      Role
+                    </th>
+                    <th className="w-32 py-2 px-4"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {initialNotebooks.map((notebook) => (
                     <tr
                       key={notebook.id}
-                      className="group border-t border-[#2A2A2A] hover:bg-[#2A2A2A]"
+                      className="group hover:bg-[#2A2A2A] transition-colors"
                     >
-                      <td className="py-3">
-                        <Link href={`/notebook/${notebook.id}`}>
-                          <div className="flex items-center">
-                            <span className="mr-2">
-                              {getNotebookEmoji(notebook)}
-                            </span>
-                            <span className="text-white">{notebook.title}</span>
-                          </div>
+                      <td className="py-2 px-4">
+                        <Link
+                          href={`/notebook/${notebook.id}`}
+                          className="flex items-center gap-3 text-white hover:text-blue-400"
+                        >
+                          <span>📓</span>
+                          {notebook.title}
                         </Link>
                       </td>
-                      <td className="py-3 text-gray-400">
-                        {notebook.sources.length} sources
+                      <td className="py-2 px-4 text-gray-400">
+                        {notebook.sources.length}{" "}
+                        {notebook.sources.length === 1 ? "Source" : "Sources"}
                       </td>
-                      <td className="py-3 text-gray-400">
+                      <td className="py-2 px-4 text-gray-400">
                         {new Date(notebook.updatedAt).toLocaleDateString()}
                       </td>
-                      <td className="py-3 pr-4 text-right">
+                      <td className="py-2 px-4 text-gray-400">
+                        {notebook.role === "Owner" ? (
+                          "Owner"
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span>Reader</span>
+                            <span className="text-xs">·</span>
+                            <span className="text-xs">
+                              by {notebook.ownerName}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2 px-4 flex justify-end gap-2">
+                        {notebook.role === "Owner" && (
+                          <ShareDialog notebookId={notebook.id} />
+                        )}
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <MoreVertical className="h-4 w-4" />
                         </Button>
@@ -136,26 +163,38 @@ export default function HomePage({
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {initialNotebooks.map((notebook) => (
-                <Link key={notebook.id} href={`/notebook/${notebook.id}`}>
-                  <Card className="aspect-[1.4/1] p-6 hover:bg-[#2A2A2A] transition-colors border-[#333333] bg-[#1E1E1E] group relative">
-                    <div className="flex flex-col h-full">
-                      <div className="mb-2">
-                        <span className="text-2xl">
-                          {getNotebookEmoji(notebook)}
-                        </span>
+                <div key={notebook.id} className="relative">
+                  <Link href={`/notebook/${notebook.id}`}>
+                    <Card className="aspect-[1.4/1] p-6 hover:bg-[#2A2A2A] transition-colors border-[#333333] bg-[#1E1E1E] group">
+                      <div className="flex flex-col h-full">
+                        <div className="mb-2">
+                          <span className="text-2xl">
+                            {getNotebookEmoji(notebook)}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-medium text-white mb-2">
+                          {notebook.title}
+                        </h3>
+                        <div className="mt-auto">
+                          <p className="text-sm text-gray-400">
+                            {new Date(notebook.updatedAt).toLocaleDateString()}{" "}
+                            · {notebook.sources.length} sources
+                          </p>
+                          {notebook.role !== "Owner" && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Shared by {notebook.ownerName}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <h3 className="text-lg font-medium text-white mb-2">
-                        {notebook.title}
-                      </h3>
-                      <div className="mt-auto">
-                        <p className="text-sm text-gray-400">
-                          {new Date(notebook.updatedAt).toLocaleDateString()} ·{" "}
-                          {notebook.sources.length} sources
-                        </p>
-                      </div>
+                    </Card>
+                  </Link>
+                  {notebook.role === "Owner" && (
+                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ShareDialog notebookId={notebook.id} />
                     </div>
-                  </Card>
-                </Link>
+                  )}
+                </div>
               ))}
             </div>
           )}

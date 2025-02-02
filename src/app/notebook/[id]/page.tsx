@@ -31,14 +31,23 @@ import { Chat } from "@/components/chat";
 import { SummaryView } from "@/components/summary-view";
 import { cn } from "@/lib/utils";
 import { Source } from "@prisma/client";
+import { EditableTitle } from "@/components/editable-title";
+import { AddNoteDialog } from "@/components/add-note-dialog";
+import { NoteModal } from "@/components/note-modal";
+import { ShareDialog } from "@/components/share-dialog";
 
 interface Notebook {
   id: string;
   title: string;
   content: string | null;
   description: string | null;
-  // Add other fields as needed
   sources: Source[];
+  notes: {
+    id: string;
+    title: string;
+    content: string;
+    createdAt: string;
+  }[];
 }
 
 export default function NotebookPage({ params }: { params: { id: string } }) {
@@ -51,35 +60,36 @@ export default function NotebookPage({ params }: { params: { id: string } }) {
   const [showWebsiteInput, setShowWebsiteInput] = useState(false);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const chatRef = useRef<{ handleUrlSummary: (url: string) => void }>(null);
+  const [selectedNote, setSelectedNote] = useState<{
+    id: string;
+    title: string;
+    content: string;
+    createdAt: string;
+  } | null>(null);
 
   useEffect(() => {
-    async function fetchNotebook() {
+    const fetchNotebook = async () => {
       try {
-        setLoading(true);
         const response = await fetch(`/api/notebooks/${params.id}`);
+        const data = await response.json();
 
         if (!response.ok) {
-          if (response.status === 401) {
-            setError("Please sign in to view this notebook");
-          } else if (response.status === 404) {
-            setError("This notebook doesn't exist or was deleted");
-          } else {
-            throw new Error("Failed to fetch notebook");
-          }
-          return;
+          throw new Error(data.error || "Failed to load notebook");
         }
 
-        const data = await response.json();
         setNotebook(data);
-        console.log(data);
-      } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "An error occurred");
+        setError(null);
+      } catch (error) {
+        console.error("Error fetching notebook:", error);
+        setError(
+          error instanceof Error ? error.message : "Failed to load notebook"
+        );
       } finally {
         setLoading(false);
       }
-    }
+    };
 
     fetchNotebook();
   }, [params.id]);
@@ -94,31 +104,94 @@ export default function NotebookPage({ params }: { params: { id: string } }) {
     chatRef.current?.handleUrlSummary(url);
   };
 
-  const handleGenerateAudio = () => {
+  const handleGenerateAudio = async () => {
     setIsGeneratingAudio(true);
+    setAudioError(null);
+
+    try {
+      const response = await fetch(`/api/notebooks/${params.id}/audio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversation: {
+            style: "deep_dive",
+            hosts: 2,
+            language: "en",
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate audio");
+      }
+
+      // Success case handling here (without toast)
+    } catch (error) {
+      console.error("Error generating audio:", error);
+      setAudioError(
+        error instanceof Error ? error.message : "Failed to generate audio"
+      );
+    } finally {
+      setIsGeneratingAudio(false);
+    }
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-56px)] bg-[#1C1C1C]">
+        <div className="text-gray-400">Loading...</div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div>Error: {error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-56px)] bg-[#1C1C1C]">
+        <div className="max-w-md text-center space-y-4">
+          <div className="text-red-500 bg-red-500/10 px-6 py-4 rounded-lg">
+            <h3 className="font-medium mb-2">Access Denied</h3>
+            <p className="text-sm">{error}</p>
+          </div>
+          <Link href="/" className="text-sm text-blue-400 hover:underline">
+            Return to Notebooks
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
     <main className="min-h-screen bg-[#1C1C1C]">
       <nav className="border-b border-[#2A2A2A]">
         <div className="container flex items-center justify-between py-4">
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="text-xl font-semibold text-white">
-              Untitled notebook
-            </span>
-          </Link>
+          <div className="flex items-center space-x-2">
+            <EditableTitle
+              initialTitle={notebook?.title || "Untitled notebook"}
+              onSave={async (newTitle) => {
+                try {
+                  const response = await fetch(`/api/notebooks/${params.id}`, {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ title: newTitle }),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error("Failed to update title");
+                  }
+                } catch (error) {
+                  console.error("Error updating notebook title:", error);
+                }
+              }}
+            />
+          </div>
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon">
-              <Share className="h-5 w-5" />
-            </Button>
+            <ShareDialog notebookId={params.id} />
             <Button variant="ghost" size="icon">
               <Settings className="h-5 w-5" />
             </Button>
@@ -322,25 +395,36 @@ export default function NotebookPage({ params }: { params: { id: string } }) {
                         variant="outline"
                         className="w-full"
                         onClick={handleGenerateAudio}
+                        disabled={isGeneratingAudio}
                       >
-                        Generate
+                        {isGeneratingAudio ? (
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            Generating...
+                          </div>
+                        ) : (
+                          "Generate"
+                        )}
                       </Button>
                     </div>
+                    {audioError && (
+                      <p className="text-sm text-red-500 mt-2">{audioError}</p>
+                    )}
                   </div>
                 )}
               </Card>
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-medium text-white">Notes</h2>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">Notes</h2>
+                <AddNoteDialog
+                  notebookId={params.id}
+                  onNoteAdded={() => {
+                    router.refresh();
+                  }}
+                />
               </div>
-              <Button className="w-full mb-4" variant="outline">
-                + Add note
-              </Button>
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <Button variant="outline" size="sm">
                   Study guide
@@ -355,46 +439,66 @@ export default function NotebookPage({ params }: { params: { id: string } }) {
                   Timeline
                 </Button>
               </div>
-              <div className="flex items-center justify-center h-40 border border-dashed border-[#3A3A3A] rounded-lg">
-                <div className="text-center p-4">
-                  <div className="flex justify-center mb-2">
-                    <svg
-                      className="w-8 h-8 text-gray-400"
-                      viewBox="0 0 24 24"
-                      fill="none"
+              {notebook?.notes && notebook.notes.length > 0 ? (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {notebook.notes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="p-3 rounded-lg border border-[#3A3A3A] hover:border-[#4A4A4A] 
+                      transition-colors bg-[#2A2A2A] cursor-pointer"
+                      onClick={() => setSelectedNote(note)}
                     >
-                      <path
-                        d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3Z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M12 8V16"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M8 12H16"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-400">
-                    Saved notes will appear here
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Save a chat message to create a new note, or click Add note
-                    above.
-                  </p>
+                      <h3 className="font-medium mb-1 text-sm">{note.title}</h3>
+                      <p className="text-sm text-gray-400 line-clamp-2">
+                        {note.content}
+                      </p>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-500">
+                          {new Date(note.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center justify-center h-40 border border-dashed border-[#3A3A3A] rounded-lg">
+                  <div className="text-center p-4">
+                    <div className="flex justify-center mb-2">
+                      <svg
+                        className="w-8 h-8 text-gray-400"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <path
+                          d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3Z"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M12 8V16"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M8 12H16"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-400">No notes yet</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Click Add note to create your first note
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <Button
@@ -411,6 +515,13 @@ export default function NotebookPage({ params }: { params: { id: string } }) {
           </Button>
         </div>
       </div>
+
+      <NoteModal
+        note={selectedNote}
+        isOpen={selectedNote !== null}
+        onClose={() => setSelectedNote(null)}
+        notebookId={params.id}
+      />
     </main>
   );
 }

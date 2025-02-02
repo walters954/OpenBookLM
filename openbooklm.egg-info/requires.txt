@@ -1,0 +1,7 @@
+fastapi
+python-multipart
+uvicorn
+PyPDF2
+python-dotenv
+llamaapi
+tiktoken

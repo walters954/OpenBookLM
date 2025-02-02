@@ -15,31 +15,110 @@ spec:
         app: openbooklm
     spec:
       containers:
-      - name: openbooklm
-        image: ghcr.io/open-biz/openbooklm:main  # Updated to use GitHub Container Registry
-        ports:
-        - containerPort: 3000
-        envFrom:
-        - configMapRef:
-            name: openbooklm-config
-        - secretRef:
-            name: openbooklm-secrets
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 3000
-          initialDelaySeconds: 10
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 3000
-          initialDelaySeconds: 15
-          periodSeconds: 10
+        # Frontend container
+        - name: frontend
+          image: node:20-slim
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: clerk-credentials
+                  key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: clerk-credentials
+                  key: CLERK_SECRET_KEY
+            - name: DATABASE_URL
+              value: postgresql://postgres:CKcomXQCBUCFMxhgkcHynsvqPzRDzCpd@autorack.proxy.rlwy.net:53649/railway
+            - name: UPSTASH_REDIS_REST_URL
+              value: https://darling-muskrat-30013.upstash.io
+            - name: UPSTASH_REDIS_REST_TOKEN
+              value: AXU9AAIjcDFkZTQzMWMxZjQ1NTA0ZGIwYTBkZTUzOWZiOTNiNjk0MXAxMA
+          command: ['/bin/sh', '-c']
+          args:
+            - |
+              apt-get update
+              apt-get install -y git openssl libssl-dev ca-certificates
+              npm install -g pnpm
+              git clone -b feat/connor/fe-be-connect-demo-api https://github.com/open-biz/openbooklm.git 
+              cd openbooklm
+              pnpm install
+              npx prisma generate
+              pnpm build
+              pnpm start
+          resources:
+            requests:
+              cpu: '500m'
+              memory: '1Gi'
+            limits:
+              cpu: '1000m'
+              memory: '2Gi'
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 180
+            periodSeconds: 15
+            timeoutSeconds: 5
+
+        # Backend container
+        - name: backend
+          image: python:3.12-slim
+          ports:
+            - containerPort: 8000
+          env:
+            - name: CEREBRAS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-credentials
+                  key: CEREBRAS_API_KEY
+            - name: LLAMA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-credentials
+                  key: LLAMA_API_KEY
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-credentials
+                  key: OPENAI_API_KEY
+          command: ['/bin/sh', '-c']
+          args:
+            - |
+              apt-get update
+              apt-get install -y git python3-pip ffmpeg libsndfile1 libportaudio2
+              git clone -b feat/connor/fe-be-connect-demo-api https://github.com/open-biz/openbooklm.git
+              cd openbooklm
+              pip install -r requirements.txt
+              python3 -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+          resources:
+            requests:
+              cpu: '500m'
+              memory: '2Gi'
+            limits:
+              cpu: '1000m'
+              memory: '4Gi'
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            timeoutSeconds: 5

@@ -1,0 +1,7 @@
+README.md
+setup.py
+openbooklm.egg-info/PKG-INFO
+openbooklm.egg-info/SOURCES.txt
+openbooklm.egg-info/dependency_links.txt
+openbooklm.egg-info/requires.txt
+openbooklm.egg-info/top_level.txt

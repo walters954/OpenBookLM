@@ -235,7 +235,7 @@ def get_model_context_window(model: str) -> int:
     return model_windows.get(model, 32_768)  # Default to 32k if model not found
 
 def estimate_token_cost_per_model(
-    model_name: str = "llama3.1-8b",
+    model_name: str = "llama-3.1-8b",
     num_tokens: int = None,
     prompt_tokens: int = None,
     completion_tokens: int = None
@@ -378,7 +378,7 @@ def validate_request(request: Dict[str, Any], model: str = "llama3.1-8b") -> Non
 
 if __name__ == "__main__":
     # Example usage
-    model_name = "llama3.1-8b-instant"
+    model_name = "llama-3.1-8b-instant"
     context_window = get_model_context_window(model_name)
     print(f"Context window for {model_name}: {context_window} tokens")
 

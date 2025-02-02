@@ -15,7 +15,7 @@ if not LLAMA_API_KEY:
 
 # Constants
 GROQ_API_KEY = "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"
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "llama-3.1-8b-instant"
 MAX_TOKENS_PER_REQUEST = 4000  # Groq's recommended max
 RATE_LIMIT_TPM = 6000  # Tokens per minute limit
 
