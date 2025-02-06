@@ -7,7 +7,11 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: "OpenBookLM",
-  description: "AI-powered notebook application",
+  description: "Open source version of NotebookLM",
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/logo.png',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

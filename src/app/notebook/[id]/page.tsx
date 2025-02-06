@@ -16,6 +16,12 @@ import {
   Info,
   MoreVertical,
 } from "lucide-react";
+import { useState, useRef } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Settings, Share, ChevronRight, X, Upload, Link as LinkIcon, Youtube, Info, MoreVertical } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -190,6 +196,19 @@ export default function NotebookPage({ params }: { params: { id: string } }) {
               }}
             />
           </div>
+          <Link href="/" className="flex items-center space-x-2">
+            <span className="text-xl font-semibold text-white">
+              Untitled notebook
+            </span>
+            <Image
+              src="/logo.png"
+              alt="OpenBookLM Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8"
+            />
+            <span className="text-xl font-semibold text-white">Untitled notebook</span>
+          </Link>
           <div className="flex items-center space-x-4">
             <ShareDialog notebookId={params.id} />
             <Button variant="ghost" size="icon">

@@ -1,25 +1,47 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
-import { getOrCreateUser } from "@/lib/auth";
-import HomePage from "./home-page";
-import { setAllNotebooks } from "@/lib/redis-utils";
+import Link from 'next/link'
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Settings, Grid3X3, List } from 'lucide-react'
 
 export default async function Page() {
   const { userId } = await auth();
 
-  if (!userId) {
-    return (
-      <div className="flex flex-col h-[calc(100vh-56px)]">
-        <div className="flex-1 p-8">
-          <h1 className="text-[40px] leading-tight text-[#8AB4F8] font-normal mb-6">
-            Welcome to OpenBookLM
-          </h1>
-          <div className="max-w-2xl">
-            <p className="text-[15px] text-gray-400">
-              Your AI-powered research companion. Transform content into
-              meaningful conversations.
-            </p>
+  const communityCourses = [
+    {
+      id: 1,
+      title: 'Introduction to AI',
+      author: 'Community',
+      participants: 1200,
+    },
+    {
+      id: 2,
+      title: 'Machine Learning Basics',
+      author: 'Community',
+      participants: 850,
+    },
+  ]
+
+  return (
+    <main className="min-h-screen bg-background">
+      <nav className="border-b">
+        <div className="container flex items-center justify-between py-4">
+          <Link href="/" className="flex items-center space-x-2">
+            <Image
+              src="/logo.png"
+              alt="OpenBookLM Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8"
+            />
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-teal-500 bg-clip-text text-transparent">
+              OpenBookLM
+            </span>
+          </Link>
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="icon">
+              <Settings className="h-5 w-5" />
+            </Button>
           </div>
         </div>
       </div>
