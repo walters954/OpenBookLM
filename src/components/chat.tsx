@@ -260,8 +260,10 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
     return (
       <div className="flex flex-col h-full">
         {process.env.NODE_ENV === "development" && debugInfo && (
-          <div className="p-4 bg-gray-800 text-xs">
-            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+          <div className="p-4 bg-gray-800 text-xs rounded-lg mb-4">
+            <pre className="whitespace-pre-wrap break-words font-mono text-gray-300 overflow-x-auto">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
           </div>
         )}
         {isLoadingHistory ? (

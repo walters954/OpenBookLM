@@ -74,6 +74,9 @@ else
     echo -e "${YELLOW}Skipping Docker build step. Using existing image.${NC}"
 fi
 
+# Call the validation function before deployment
+validate_environment
+
 # Deploy to Kubernetes
 echo -e "${GREEN}Deploying to Kubernetes...${NC}"
 
@@ -83,9 +86,24 @@ kubectl create namespace openbooklm --dry-run=client -o yaml | kubectl apply -f 
 # Apply Kubernetes configurations
 kubectl apply -f k8s/ -n openbooklm
 
-# Wait for deployment to be ready
+# Wait for deployment with increased timeout
 echo -e "${GREEN}Waiting for deployment to be ready...${NC}"
-kubectl wait --for=condition=available --timeout=300s deployment/openbooklm -n openbooklm
+if ! kubectl wait --for=condition=available --timeout=600s deployment/openbooklm -n openbooklm; then
+  echo -e "${RED}Deployment failed to become ready. Checking logs...${NC}"
+  
+  # Get the pod name
+  POD_NAME=$(kubectl get pods -n openbooklm -l app=openbooklm -o jsonpath='{.items[0].metadata.name}')
+  
+  if [ ! -z "$POD_NAME" ]; then
+    echo -e "${YELLOW}Pod logs:${NC}"
+    kubectl logs -n openbooklm $POD_NAME
+    
+    echo -e "${YELLOW}Pod description:${NC}"
+    kubectl describe pod -n openbooklm $POD_NAME
+  fi
+  
+  exit 1
+fi
 
 # Get the deployment status
 echo -e "${GREEN}Deployment Status:${NC}"
@@ -119,3 +137,26 @@ echo -e "To view your deployment:"
 echo -e "${YELLOW}kubectl get pods -n openbooklm${NC}"
 echo -e "To view logs:"
 echo -e "${YELLOW}kubectl logs -f deployment/openbooklm -n openbooklm${NC}"
+
+# Add this near the start of the script
+validate_environment() {
+  local required_vars=(
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+    "CLERK_SECRET_KEY"
+    "DATABASE_URL"
+    "REDIS_URL"
+  )
+
+  local missing_vars=()
+  for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+      missing_vars+=("$var")
+    fi
+  done
+
+  if [ ${#missing_vars[@]} -ne 0 ]; then
+    echo -e "${RED}Error: Missing required environment variables:${NC}"
+    printf '%s\n' "${missing_vars[@]}"
+    exit 1
+  fi
+}

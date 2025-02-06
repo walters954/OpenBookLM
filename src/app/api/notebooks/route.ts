@@ -48,6 +48,7 @@ export async function POST(req: Request) {
       data: {
         title,
         userId: user?.id,
+        content: "",
       },
     });
 

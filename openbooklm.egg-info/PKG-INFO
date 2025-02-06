@@ -1,0 +1,11 @@
+Metadata-Version: 2.2
+Name: openbooklm
+Version: 0.1
+Requires-Dist: fastapi
+Requires-Dist: python-multipart
+Requires-Dist: uvicorn
+Requires-Dist: PyPDF2
+Requires-Dist: python-dotenv
+Requires-Dist: llamaapi
+Requires-Dist: tiktoken
+Dynamic: requires-dist
