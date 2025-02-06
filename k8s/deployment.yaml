@@ -14,7 +14,10 @@ spec:
       labels:
         app: openbooklm
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
+
         # Frontend container
         - name: frontend
           image: node:20-slim
@@ -122,3 +125,35 @@ spec:
             initialDelaySeconds: 120
             periodSeconds: 15
             timeoutSeconds: 5
+
+      - name: openbooklm
+        image: ghcr.io/open-biz/openbooklm:sha-96454f5f31b03236eada4c4f5fe53a97b0445565
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: openbooklm-config
+        - secretRef:
+            name: openbooklm-secrets
+        - secretRef:
+            name: clerk-credentials
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+
