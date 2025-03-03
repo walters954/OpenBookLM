@@ -49,10 +49,13 @@ export async function POST(
         backendFormData.append("sourceId", source.id);
         backendFormData.append("notebookId", params.id);
         backendFormData.append("userId", userId);
-
         try {
           const backendResponse = await fetch(
+<<<<<<< HEAD
+            `${process.env.NEXT_PUBLIC_API_URL}/groq/process-pdf`,
+=======
             `${process.env.NEXT_PUBLIC_API_URL}/${notebook.provider}/process-pdf`,
+>>>>>>> main
             {
               method: "POST",
               body: backendFormData,
@@ -74,7 +77,11 @@ export async function POST(
             dialogueFormData.append("summary", responseData.summary);
 
             const dialogueResponse = await fetch(
+<<<<<<< HEAD
+              `${process.env.NEXT_PUBLIC_API_URL}/groq/generate-dialogue`,
+=======
               `${process.env.NEXT_PUBLIC_API_URL}/${notebook.provider}/generate-dialogue`,
+>>>>>>> main
               {
                 method: "POST",
                 body: dialogueFormData,
@@ -119,7 +126,6 @@ export async function POST(
               content: `Error processing PDF: ${error.message}`,
             },
           });
-          // Don't throw here - we want to continue processing other files
         }
 
         return source;

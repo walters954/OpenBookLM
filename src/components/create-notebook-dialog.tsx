@@ -33,6 +33,7 @@ import {
 
 interface CreateNotebookDialogProps {
   children?: React.ReactNode;
+  onNotebookCreated?: (notebook: any) => void;
 }
 
 interface UploadProgress {
@@ -42,6 +43,7 @@ interface UploadProgress {
   };
 }
 
+export function CreateNotebookDialog({ children, onNotebookCreated }: CreateNotebookDialogProps) {
 // Add this import at the top with other imports
 import {
   Select,
@@ -61,7 +63,6 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleDriveLoading, setIsGoogleDriveLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const router = useRouter();
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({});
   const [selectedProvider, setSelectedProvider] = useState<string>("groq");
@@ -107,34 +108,25 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    setFiles((prev) => [...prev, ...acceptedFiles]);
-  }, []);
+  const handleCreateNotebook = async () => {
+    // Create an optimistic notebook
+    const optimisticNotebook = {
+      id: `temp-${Date.now()}`,
+      title: "New Notebook",
+      sources: [],
+      updatedAt: new Date().toISOString(),
+      role: "owner",
+      ownerName: "", // Will be filled by server
+      userId: "", // Will be filled by server
+    };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      "application/pdf": [".pdf"],
-      "text/plain": [".txt"],
-      "text/markdown": [".md"],
-      "audio/mpeg": [".mp3"],
-      "audio/wav": [".wav"],
-    },
-    multiple: true,
-  });
-
-  const handleRemoveFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = async () => {
-    if (files.length === 0) {
-      toast.error("Please add at least one source");
-      return;
+    // Call the callback immediately with optimistic data
+    if (onNotebookCreated) {
+      onNotebookCreated(optimisticNotebook);
     }
 
-    setIsSubmitting(true);
     try {
+      const response = await fetch("/api/notebooks", {
       // First create the notebook with provider
       const notebookResponse = await fetch("/api/notebooks", {
         method: "POST",
@@ -228,23 +220,42 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+          title: "New Notebook", // We'll let users rename it later
+        }),
       });
 
-      if (!response.ok) throw new Error("Failed to fetch URL content");
+      if (!response.ok) {
+        throw new Error("Failed to create notebook");
+      }
 
-      const data = await response.json();
-      const blob = new Blob([data.content], { type: "text/plain" });
-      const file = new File([blob], `${new URL(url).hostname}.txt`, {
-        type: "text/plain",
-      });
-      setFiles((prev) => [...prev, file]);
-      setShowLinkInput(false);
+      const notebook = await response.json();
+      
+      // Navigate to the new notebook
+      router.push(`/notebook/${notebook.id}`);
+      
+      // Refresh the router cache in the background
+      router.refresh();
     } catch (error) {
-      console.error("Error fetching URL:", error);
+      console.error("Error creating notebook:", error);
+      toast.error("Failed to create notebook");
     }
   };
 
+  // Instead of showing dialog, directly handle notebook creation
+  return children ? (
+    <div onClick={handleCreateNotebook}>
+      {children}
+    </div>
+  ) : (
+    <Button
+      size="lg"
+      className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 flex items-center gap-2"
+      onClick={handleCreateNotebook}
+    >
+      <Plus className="h-5 w-5" />
+      Create Notebook
+    </Button>
   // Paste text functionality
   const handlePasteText = () => {
     setShowPasteText(true);
