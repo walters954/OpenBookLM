@@ -5,6 +5,11 @@ import sys
 import re
 from PyPDF2 import PdfReader
 import logging
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(ROOT)
+
+from backend.utils.decorators import timeit
 import asyncio
 from pathlib import Path
 import aiofiles
@@ -120,6 +125,51 @@ def should_skip_line(line: str) -> bool:
     return False
 
 def should_skip_section(line: str) -> bool:
+    """Check if line indicates start of a section that should be skipped."""
+    line = line.strip()
+    if not line:
+        return False
+
+    # Check for exact matches at start of line (no indentation)
+    skip_markers = ['References', 'Bibliography', 'Notes']
+    if any(line == marker for marker in skip_markers):
+        return True
+
+    # For Appendix, check if it's a section header
+    if re.match(r'^(?:\d+\s+)?Appendix\s*$', line):
+        return True
+
+    return False
+
+def wrap_line(line: str, width: int = 120) -> str:
+    """Wrap a single line to specified width."""
+    if len(line) <= width:
+        return line
+
+    words = line.split()
+    lines = []
+    current_line = []
+    current_length = 0
+
+    for word in words:
+        word_length = len(word)
+        if current_length + word_length + len(current_line) <= width:
+            current_line.append(word)
+            current_length += word_length
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+            current_line = [word]
+            current_length = word_length
+
+    if current_line:
+        lines.append(' '.join(current_line))
+
+    return '\n'.join(lines)
+
+def convert_pdf_to_text(input_pdf_path: str, output_txt_path: str) -> None:
+    """Convert a PDF file to text using PyPDF2."""
+    try:
     """Check if line indicates start of section that should be skipped."""
     line = line.strip()
     return any(re.match(pattern, line, re.IGNORECASE) for pattern in SKIP_SECTIONS)
@@ -155,6 +205,7 @@ async def convert_pdf_to_text(input_pdf_path: str, output_txt_path: str) -> None
                 # Split into lines to check for appendix/references
                 lines = page_text.split('\n')
                 cleaned_lines = []
+
                 
                 for line in lines:
                     if should_skip_section(line):
@@ -182,6 +233,80 @@ async def convert_pdf_to_text(input_pdf_path: str, output_txt_path: str) -> None
                     if i < len(reader.pages) - 1:  # Don't add newline after last page
                         text_parts.append('')  # Single newline between pages
 
+        # Write text to file
+        with open(output_txt_path, 'w') as f:
+            f.write('\n'.join(text_parts))
+
+    except Exception as e:
+        logger.error(f"Error converting PDF to text: {e}")
+
+def clean_text_formatting(filepath: str) -> None:
+    """Clean up text formatting while preserving original line breaks."""
+    # First pass: Read all lines
+    with open(filepath, 'r') as f:
+        lines = f.readlines()
+
+    # Second pass: Process lines
+    result = []
+    in_content = False
+
+    for line in lines:
+        if line.startswith('PDF METADATA:'):
+            in_content = False
+            result.append(line)
+        elif line.startswith('DOCUMENT CONTENT:'):
+            result.extend([line, ''])
+            in_content = True
+        elif in_content:
+            # Clean up whitespace and wrap long lines
+            cleaned = line.lstrip()
+            if cleaned:
+                wrapped = wrap_line(cleaned.rstrip())
+                result.append(wrapped + '\n')
+            else:
+                result.append('\n')
+        else:
+            result.append(line)
+
+    # Final pass: Write processed content
+    with open(filepath, 'w') as f:
+        f.writelines(result)
+
+def remove_appendix_and_references(filepath: str) -> None:
+    """Remove appendix sections with proper file handling."""
+    # First pass: Read and identify appendix location
+    appendix_line = -1
+    with open(filepath, 'r') as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped and not line.startswith(' '):
+                if stripped == 'Appendix':
+                    print("\nFound appendix marker")
+                    appendix_line = i
+                    break
+
+    # Second pass: Write truncated content if appendix was found
+    if appendix_line >= 0:
+        print(f"Truncating file at line: {appendix_line}")
+        with open(filepath, 'w') as f:
+            f.writelines(lines[:appendix_line])
+
+def process_pdf(input_pdf_path: str, output_txt_path: str) -> None:
+    """Process PDF in multiple steps with proper file handling."""
+    # Step 1: Convert PDF to text
+    convert_pdf_to_text(input_pdf_path, output_txt_path)
+
+    # Step 2: Remove appendix sections
+    remove_appendix_and_references(output_txt_path)
+
+    # Step 3: Clean up text formatting
+    clean_text_formatting(output_txt_path)
+
+    print(f"Processed {os.path.basename(input_pdf_path)} -> {output_txt_path}")
+
+@timeit
+def process_pdf_documents(input_dir: str, output_dir: str) -> None:
         # Write processed text to file
         final_text = '\n'.join(text_parts)
         async with aiofiles.open(output_txt_path, 'w', encoding='utf-8') as f:
@@ -249,6 +374,11 @@ async def process_pdf_documents(input_dir: str, output_dir: str) -> None:
         pdf_path = os.path.join(input_dir, filename)
         output_path = os.path.join(output_dir, os.path.splitext(filename)[0] + '.txt')
 
+        process_pdf(pdf_path, output_path)
+
+
+if __name__ == "__main__":
+    process_pdf_documents(INPUT_DIR, OUTPUT_DIR)
         await process_pdf(pdf_path, output_path)
 
 

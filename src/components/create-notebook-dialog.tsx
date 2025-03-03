@@ -44,6 +44,21 @@ interface UploadProgress {
 }
 
 export function CreateNotebookDialog({ children, onNotebookCreated }: CreateNotebookDialogProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
+
+  const handleCreateNotebook = async () => {
+    // Create an optimistic notebook
+    const optimisticNotebook = {
+      id: `temp-${Date.now()}`,
+      title: "New Notebook",
+      sources: [],
+      updatedAt: new Date().toISOString(),
+      role: "owner",
+      ownerName: "", // Will be filled by server
+      userId: "", // Will be filled by server
+    };
+
 // Add this import at the top with other imports
 import {
   Select,
@@ -252,6 +267,10 @@ export function CreateNotebookDialog({ children }: CreateNotebookDialogProps) {
       size="lg"
       className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 flex items-center gap-2"
       onClick={handleCreateNotebook}
+    >
+      <Plus className="h-5 w-5" />
+      Create Notebook
+    </Button>
     >
       <Plus className="h-5 w-5" />
       Create Notebook

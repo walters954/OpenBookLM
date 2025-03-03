@@ -43,6 +43,14 @@ export function GitHubStats() {
 
   return (
     <div className="flex items-center gap-2 border-l border-gray-700 ml-2 pl-2">
+      <div className="flex items-center gap-1">
+        <Star className="h-4 w-4" />
+        <span className="text-sm">{stats.stars}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <GitFork className="h-4 w-4" />
+        <span className="text-sm">{stats.forks}</span>
+      </div>
       <span className="text-sm font-medium">{stats.fullName}</span>
       <Link
         href={`${REPO_URL}/stargazers`}
