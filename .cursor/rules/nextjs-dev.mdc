@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Do not run `pnpm dev` in the terminal I will do this manually
