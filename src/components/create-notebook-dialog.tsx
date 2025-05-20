@@ -60,12 +60,11 @@ export function CreateNotebookDialog({
     const [isPickerOpen, setIsPickerOpen] = useState(false);
     const router = useRouter();
     const [uploadProgress, setUploadProgress] = useState<UploadProgress>({});
-    const [selectedProvider, setSelectedProvider] = useState<string>("groq");
+    const [selectedProvider, setSelectedProvider] = useState<string>("openai");
     const [providerHealth, setProviderHealth] = useState<
         Record<string, boolean>
     >({
-        groq: false,
-        cerebras: false,
+        openai: false,
     });
 
     // Add dropzone functionality
@@ -84,7 +83,10 @@ export function CreateNotebookDialog({
     const handleSubmit = async () => {
         setIsSubmitting(true);
         try {
+            console.log("Starting notebook creation process");
+
             // First create the notebook with provider
+            console.log("Creating notebook with provider:", selectedProvider);
             const notebookResponse = await fetch("/api/notebooks", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -94,32 +96,85 @@ export function CreateNotebookDialog({
                 }),
             });
 
-            if (!notebookResponse.ok)
-                throw new Error("Failed to create notebook");
-            const notebook = await notebookResponse.json();
-
-            // Then upload each file
-            const formData = new FormData();
-            files.forEach((file) => {
-                formData.append("files", file);
-            });
-
-            const uploadResponse = await fetch(
-                `/api/notebooks/${notebook.id}/sources`,
-                {
-                    method: "POST",
-                    body: formData,
-                }
+            console.log(
+                "Notebook API response status:",
+                notebookResponse.status
             );
 
-            if (!uploadResponse.ok) throw new Error("Failed to upload sources");
+            if (!notebookResponse.ok) {
+                const errorText = await notebookResponse.text();
+                console.error(
+                    "Notebook creation failed with status:",
+                    notebookResponse.status
+                );
+                console.error("Error response:", errorText);
+                throw new Error(`Failed to create notebook: ${errorText}`);
+            }
+
+            const notebook = await notebookResponse.json();
+            console.log("Notebook created successfully:", notebook);
+
+            // Then upload each file
+            if (files.length > 0) {
+                console.log(
+                    `Uploading ${files.length} files to notebook ${notebook.id}`
+                );
+                const formData = new FormData();
+                files.forEach((file) => {
+                    formData.append("files", file);
+                    console.log(
+                        "Adding file to upload:",
+                        file.name,
+                        file.type,
+                        file.size
+                    );
+                });
+
+                try {
+                    const uploadResponse = await fetch(
+                        `/api/notebooks/${notebook.id}/sources`,
+                        {
+                            method: "POST",
+                            body: formData,
+                        }
+                    );
+
+                    console.log(
+                        "Upload API response status:",
+                        uploadResponse.status
+                    );
+
+                    if (!uploadResponse.ok) {
+                        const uploadErrorText = await uploadResponse.text();
+                        console.error(
+                            "File upload failed with status:",
+                            uploadResponse.status
+                        );
+                        console.error(
+                            "Upload error response:",
+                            uploadErrorText
+                        );
+                        throw new Error(
+                            `Failed to upload sources: ${uploadErrorText}`
+                        );
+                    }
+
+                    console.log("Files uploaded successfully");
+                } catch (uploadError: any) {
+                    console.error("Error during file upload:", uploadError);
+                    // Don't rethrow - we want to navigate to the notebook even if uploads fail
+                    toast.error(
+                        `Files uploaded failed: ${uploadError.message}`
+                    );
+                }
+            }
 
             toast.success("Notebook created successfully");
             router.refresh();
             router.push(`/notebook/${notebook.id}`);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error creating notebook:", error);
-            toast.error("Failed to create notebook");
+            toast.error(`Failed to create notebook: ${error.message}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -129,14 +184,12 @@ export function CreateNotebookDialog({
     useEffect(() => {
         const checkHealth = async () => {
             try {
-                const providers = ["groq", "cerebras"];
+                const providers = ["openai"];
                 const healthStatus: Record<string, boolean> = {};
 
                 for (const provider of providers) {
                     try {
-                        const response = await fetch(
-                            `${process.env.NEXT_PUBLIC_API_URL}/${provider}/health`
-                        );
+                        const response = await fetch(`/api/${provider}/health`);
                         const data = await response.json();
                         healthStatus[provider] = data.status === "ok";
                     } catch (error) {
@@ -152,8 +205,7 @@ export function CreateNotebookDialog({
             } catch (error) {
                 console.error("Health check failed:", error);
                 setProviderHealth({
-                    groq: false,
-                    cerebras: false,
+                    openai: false,
                 });
             }
         };
@@ -321,7 +373,6 @@ export function CreateNotebookDialog({
                             Add sources
                         </span>
                     </div>
-                    <DialogTrigger asChild></DialogTrigger>
                 </div>
                 <p className="text-gray-400 mb-2">
                     Sources let NotebookLM base its responses on the information
@@ -331,8 +382,6 @@ export function CreateNotebookDialog({
                     (Examples: marketing plans, course reading, research notes,
                     meeting transcripts, sales documents, etc.)
                 </p>
-
-                {/* Remove the AI Provider selector from here */}
 
                 <div
                     {...getRootProps()}
@@ -480,12 +529,7 @@ export function CreateNotebookDialog({
                 <div className="flex items-center justify-end gap-4">
                     <div className="w-full">
                         <Select
-                            options={[
-                                { value: "cerebras", label: "Cerebras" },
-                                { value: "groq", label: "Groq" },
-                                { value: "anthropic", label: "Anthropic" },
-                                { value: "openai", label: "OpenAI" },
-                            ]}
+                            options={[{ value: "openai", label: "OpenAI" }]}
                             value={selectedProvider}
                             onChange={(e) =>
                                 setSelectedProvider(e.target.value)

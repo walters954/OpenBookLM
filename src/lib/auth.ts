@@ -1,56 +1,33 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "./db";
 import { CreditManager } from "./credit-manager";
 import { nanoid } from "nanoid";
 
+// Mock local user ID for development
+const MOCK_USER_ID = "local-dev-user-123";
+
 export async function getOrCreateUser() {
-  const { userId } = await auth();
-  
-  // Handle authenticated users
-  if (userId) {
+    // Always return the mock user
     let user = await prisma.user.findUnique({
-      where: { clerkId: userId },
+        where: { id: MOCK_USER_ID },
     });
 
     if (!user) {
-      const clerkUser = await currentUser();
-      user = await prisma.user.create({
-        data: {
-          clerkId: userId,
-          email: clerkUser?.emailAddresses[0]?.emailAddress || "placeholder@example.com",
-          name: clerkUser?.firstName || "New User",
-          isGuest: false,
-        },
-      });
+        // Create mock user if it doesn't exist
+        user = await prisma.user.create({
+            data: {
+                id: MOCK_USER_ID,
+                email: "demo@example.com",
+                name: "Demo User",
+                isGuest: false,
+            },
+        });
     }
 
     return user;
-  }
-
-  // Handle guest users
-  const guestId = nanoid();
-  const guestUser = await prisma.user.create({
-    data: {
-      email: `guest_${guestId}@openbooklm.com`,
-      name: "Guest User",
-      isGuest: true,
-    },
-  });
-
-  // Initialize guest credits
-  await CreditManager.initializeGuestCredits(guestUser.id);
-
-  return guestUser;
 }
 
 export async function getCurrentUser() {
-  const { userId } = await auth();
-  
-  if (userId) {
     return prisma.user.findUnique({
-      where: { clerkId: userId },
+        where: { id: MOCK_USER_ID },
     });
-  }
-  
-  return null;
 }
