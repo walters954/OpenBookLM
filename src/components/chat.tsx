@@ -130,8 +130,43 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         };
 
+        const handleApiResponse = async (response: Response) => {
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(
+                    "API responded with error:",
+                    response.status,
+                    errorText
+                );
+                throw new Error(
+                    errorText || `Server error: ${response.status}`
+                );
+            }
+
+            // Log important headers individually
+            console.log(
+                "Response headers - Content-Type:",
+                response.headers.get("Content-Type")
+            );
+            console.log(
+                "Response headers - Transfer-Encoding:",
+                response.headers.get("Transfer-Encoding")
+            );
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+                console.error(
+                    "Failed to get response stream: response.body is",
+                    response.body
+                );
+                throw new Error("Failed to get response stream");
+            }
+
+            return reader;
+        };
+
         const sendMessage = async () => {
-            if (!input.trim() || !userId) return;
+            if (!input.trim()) return; // Remove userId check since we're using mock users
             setError(null);
 
             const userMessage: Message = {
@@ -143,6 +178,11 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
             setIsLoading(true);
 
             try {
+                console.log(
+                    "Sending request to API with message:",
+                    input.trim().substring(0, 50) + "..."
+                );
+
                 const response = await fetch("/api/chat", {
                     method: "POST",
                     headers: {
@@ -155,16 +195,7 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
                     }),
                 });
 
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => null);
-                    throw new Error(
-                        errorData?.error ||
-                            `Server error: ${response.status} ${response.statusText}`
-                    );
-                }
-
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error("Failed to get response stream");
+                const reader = await handleApiResponse(response);
 
                 let assistantMessage = {
                     role: "assistant" as const,
@@ -175,46 +206,116 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
                     assistantMessage,
                 ]);
 
+                let chunkCounter = 0;
+
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        console.log(
+                            "Stream complete, processed",
+                            chunkCounter,
+                            "chunks"
+                        );
+                        break;
+                    }
 
                     // Convert the chunk to text
                     const chunk = new TextDecoder().decode(value);
-                    try {
-                        const data = JSON.parse(chunk);
-                        console.log("Received chunk:", data); // Debug log
+                    chunkCounter++;
 
-                        if (data.error) {
-                            throw new Error(data.error);
+                    // Debug log for first few chunks
+                    if (chunkCounter <= 5) {
+                        console.log(`Raw chunk #${chunkCounter}:`, chunk);
+                    }
+
+                    try {
+                        // Skip empty chunks or non-JSON data
+                        if (!chunk.trim()) {
+                            console.log(
+                                `Chunk #${chunkCounter}: Empty chunk, skipping`
+                            );
+                            continue;
                         }
 
-                        // Handle different response formats
-                        const content =
-                            data.choices?.[0]?.delta?.content || // OpenAI/Cerebras format
-                            data.choices?.[0]?.message?.content || // Alternative format
-                            data.content; // Simple format
+                        // Handle 'data: ' prefix in SSE
+                        const dataChunks = chunk.split("\n\n").filter(Boolean);
 
-                        if (content) {
-                            assistantMessage.content += content;
-                            setMessages((prevMessages) => {
-                                const newMessages = [...prevMessages];
-                                newMessages[newMessages.length - 1] = {
-                                    ...assistantMessage,
-                                };
-                                return newMessages;
-                            });
+                        for (const dataChunk of dataChunks) {
+                            if (dataChunk.trim() === "data: [DONE]") {
+                                console.log("Stream end marker received");
+                                continue;
+                            }
+
+                            let jsonStr = dataChunk;
+                            if (dataChunk.startsWith("data: ")) {
+                                jsonStr = dataChunk.substring(6);
+                            }
+
+                            if (!jsonStr.trim() || !jsonStr.includes("{")) {
+                                if (chunkCounter <= 5) {
+                                    console.log(
+                                        `Chunk #${chunkCounter}: Invalid JSON in chunk:`,
+                                        jsonStr
+                                    );
+                                }
+                                continue;
+                            }
+
+                            try {
+                                const data = JSON.parse(jsonStr);
+
+                                if (chunkCounter <= 3) {
+                                    console.log(
+                                        `Chunk #${chunkCounter} parsed:`,
+                                        data
+                                    );
+                                }
+
+                                if (data.error) {
+                                    console.error(
+                                        "Error from API:",
+                                        data.error
+                                    );
+                                    throw new Error(data.error);
+                                }
+
+                                // Handle different response formats
+                                const content =
+                                    data.choices?.[0]?.delta?.content || // OpenAI/Cerebras format
+                                    data.choices?.[0]?.message?.content || // Alternative format
+                                    data.content; // Simple format
+
+                                if (content) {
+                                    assistantMessage.content += content;
+                                    setMessages((prevMessages) => {
+                                        const newMessages = [...prevMessages];
+                                        newMessages[newMessages.length - 1] = {
+                                            ...assistantMessage,
+                                        };
+                                        return newMessages;
+                                    });
+                                }
+                            } catch (jsonError) {
+                                console.error(
+                                    `JSON parse error in chunk #${chunkCounter}:`,
+                                    jsonError,
+                                    "Raw data:",
+                                    jsonStr
+                                );
+                            }
                         }
                     } catch (e) {
                         console.error(
-                            "Error parsing chunk:",
+                            `Error processing chunk #${chunkCounter}:`,
                             e,
                             "Raw chunk:",
                             chunk
                         );
+                        // Only throw if it's not a JSON parsing error or unexpected end of input
                         if (
                             e instanceof Error &&
-                            e.message !== "Unexpected end of JSON input"
+                            e.message !== "Unexpected end of JSON input" &&
+                            !e.message.includes("JSON")
                         ) {
                             throw e;
                         }
@@ -243,6 +344,8 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
             setError(null);
 
             try {
+                console.log("Sending URL for summary:", url);
+
                 const response = await fetch("/api/chat", {
                     method: "POST",
                     headers: {
@@ -255,15 +358,7 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
                     }),
                 });
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(
-                        errorText || `Server error: ${response.status}`
-                    );
-                }
-
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error("Failed to get response stream");
+                const reader = await handleApiResponse(response);
 
                 let assistantMessage = {
                     role: "assistant" as const,
@@ -274,76 +369,137 @@ export const Chat = forwardRef<ChatRef, ChatProps>(
                     assistantMessage,
                 ]);
 
+                let chunkCounter = 0;
+
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        console.log(
+                            "Stream complete, processed",
+                            chunkCounter,
+                            "chunks"
+                        );
+                        break;
+                    }
 
                     // Convert the chunk to text
                     const chunk = new TextDecoder().decode(value);
-                    try {
-                        const data = JSON.parse(chunk);
-                        console.log("Received chunk:", data); // Debug log
+                    chunkCounter++;
 
-                        if (data.error) {
-                            throw new Error(data.error);
+                    // Debug log for first few chunks
+                    if (chunkCounter <= 5) {
+                        console.log(`Raw chunk #${chunkCounter}:`, chunk);
+                    }
+
+                    try {
+                        // Skip empty chunks or non-JSON data
+                        if (!chunk.trim()) {
+                            console.log(
+                                `Chunk #${chunkCounter}: Empty chunk, skipping`
+                            );
+                            continue;
                         }
 
-                        // Handle different response formats
-                        const content =
-                            data.choices?.[0]?.delta?.content || // OpenAI/Cerebras format
-                            data.choices?.[0]?.message?.content || // Alternative format
-                            data.content; // Simple format
+                        // Handle 'data: ' prefix in SSE
+                        const dataChunks = chunk.split("\n\n").filter(Boolean);
 
-                        if (content) {
-                            assistantMessage.content += content;
-                            setMessages((prevMessages) => {
-                                const newMessages = [...prevMessages];
-                                newMessages[newMessages.length - 1] = {
-                                    ...assistantMessage,
-                                };
-                                return newMessages;
-                            });
+                        for (const dataChunk of dataChunks) {
+                            if (dataChunk.trim() === "data: [DONE]") {
+                                console.log("Stream end marker received");
+                                continue;
+                            }
+
+                            let jsonStr = dataChunk;
+                            if (dataChunk.startsWith("data: ")) {
+                                jsonStr = dataChunk.substring(6);
+                            }
+
+                            if (!jsonStr.trim() || !jsonStr.includes("{")) {
+                                if (chunkCounter <= 5) {
+                                    console.log(
+                                        `Chunk #${chunkCounter}: Invalid JSON in chunk:`,
+                                        jsonStr
+                                    );
+                                }
+                                continue;
+                            }
+
+                            try {
+                                const data = JSON.parse(jsonStr);
+
+                                if (chunkCounter <= 3) {
+                                    console.log(
+                                        `Chunk #${chunkCounter} parsed:`,
+                                        data
+                                    );
+                                }
+
+                                if (data.error) {
+                                    console.error(
+                                        "Error from API:",
+                                        data.error
+                                    );
+                                    throw new Error(data.error);
+                                }
+
+                                // Handle different response formats
+                                const content =
+                                    data.choices?.[0]?.delta?.content || // OpenAI/Cerebras format
+                                    data.choices?.[0]?.message?.content || // Alternative format
+                                    data.content; // Simple format
+
+                                if (content) {
+                                    assistantMessage.content += content;
+                                    setMessages((prevMessages) => {
+                                        const newMessages = [...prevMessages];
+                                        newMessages[newMessages.length - 1] = {
+                                            ...assistantMessage,
+                                        };
+                                        return newMessages;
+                                    });
+                                }
+                            } catch (jsonError) {
+                                console.error(
+                                    `JSON parse error in chunk #${chunkCounter}:`,
+                                    jsonError,
+                                    "Raw data:",
+                                    jsonStr
+                                );
+                            }
                         }
                     } catch (e) {
                         console.error(
-                            "Error parsing chunk:",
+                            `Error processing chunk #${chunkCounter}:`,
                             e,
                             "Raw chunk:",
                             chunk
                         );
+                        // Only throw if it's not a JSON parsing error or unexpected end of input
                         if (
                             e instanceof Error &&
-                            e.message !== "Unexpected end of JSON input"
+                            e.message !== "Unexpected end of JSON input" &&
+                            !e.message.includes("JSON")
                         ) {
                             throw e;
                         }
                     }
                 }
 
-                // Handle non-streaming response as a fallback
-                if (assistantMessage.content === "") {
-                    const text = await response.text();
-                    let data;
-                    try {
-                        data = JSON.parse(text);
-
-                        if (data.choices && data.choices[0]?.message) {
-                            assistantMessage.content =
-                                data.choices[0].message.content;
-                            setMessages((prevMessages) => {
-                                const newMessages = [...prevMessages];
-                                newMessages[newMessages.length - 1] = {
-                                    ...assistantMessage,
-                                };
-                                return newMessages;
-                            });
-                        } else {
-                            throw new Error("Invalid response format from AI");
-                        }
-                    } catch (error) {
-                        console.error("Error parsing response:", error);
-                        throw error;
-                    }
+                // If we didn't get any content from the stream, display a fallback message
+                if (!assistantMessage.content) {
+                    console.warn(
+                        "No content received from stream, using fallback message"
+                    );
+                    const fallbackMessage =
+                        "Sorry, I couldn't process that URL. This demo is running without API keys configured.";
+                    assistantMessage.content = fallbackMessage;
+                    setMessages((prevMessages) => {
+                        const newMessages = [...prevMessages];
+                        newMessages[newMessages.length - 1] = {
+                            ...assistantMessage,
+                        };
+                        return newMessages;
+                    });
                 }
             } catch (error) {
                 console.error("Chat error:", error);
