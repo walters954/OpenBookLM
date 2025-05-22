@@ -117,3 +117,5 @@ backend/musicgen.py
 # cache files
 __pycache__
 *.pyc
+backend-simple/.venv/bin/distro
+*/.venv/

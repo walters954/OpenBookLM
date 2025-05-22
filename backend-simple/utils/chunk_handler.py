@@ -3,9 +3,9 @@ import asyncio
 from typing import List, Dict, Any
 import aiofiles
 
-from .token_counter import count_tokens, truncate_text_to_tokens
-from ..api.openai_helpers import make_api_call
-from .decorators import timeit, retry_with_backoff
+from utils.token_counter import count_tokens, truncate_text_to_tokens
+from api.openai_helpers import make_api_call
+from utils.decorators import timeit, retry_with_backoff
 
 # Constants for token management
 MAX_TOKENS_PER_CHUNK = 3000  # Max tokens per API request

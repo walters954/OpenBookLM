@@ -23,8 +23,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not found in environment variables")
 
-# Initialize OpenAI client
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+# Initialize OpenAI client - use only documented parameters
+client = AsyncOpenAI(
+    api_key=OPENAI_API_KEY,
+    timeout=BASE_TIMEOUT
+)
 
 def calculate_timeout(num_tokens: int) -> float:
     """Calculate appropriate timeout based on input token count."""
@@ -72,7 +75,7 @@ async def make_api_call(
         # Calculate timeout if not provided
         if timeout is None:
             # Estimate token count from messages
-            from ..utils.token_counter import count_tokens
+            from utils.token_counter import count_tokens
             input_tokens = sum(count_tokens(msg["content"]) for msg in messages)
             timeout = calculate_timeout(input_tokens)
         
