@@ -14,7 +14,7 @@ A simplified backend for OpenBookLM that focuses only on text summarization usin
 
 ### Prerequisites
 
--   Python 3.8+
+-   Python 3.8+ (tested with Python 3.13)
 -   OpenAI API Key
 
 ### Installation
@@ -26,25 +26,44 @@ A simplified backend for OpenBookLM that focuses only on text summarization usin
     python -m venv venv
     source venv/bin/activate   # On Windows: venv\Scripts\activate
     ```
-4. Install dependencies:
+4. Upgrade pip and install dependencies:
     ```bash
-    pip install -r requirements.txt
+    pip install --upgrade pip setuptools wheel
+    pip install fastapi uvicorn openai python-dotenv aiofiles requests beautifulsoup4 python-multipart tiktoken
     ```
-5. Create a `.env` file with your OpenAI API key:
+    
+    **Note:** If you encounter issues with `tiktoken` on Python 3.13, install the latest version separately:
+    ```bash
+    pip install tiktoken
+    ```
+
+5. Set up environment variables - A `.env` file should already exist with the following format:
     ```
     OPENAI_API_KEY=your_openai_api_key_here
     FRONTEND_URL=http://localhost:3000
+    PORT=8000
+    DEFAULT_MODEL=gpt-3.5-turbo
     ```
 
 ### Running the Server
 
-Run the FastAPI server:
+1. Activate the virtual environment:
+    ```bash
+    source venv/bin/activate   # On Windows: venv\Scripts\activate
+    ```
 
-```bash
-python main.py
-```
+2. Run the FastAPI server:
+    ```bash
+    python main.py
+    ```
 
-The server will start at http://localhost:8000
+The server will start at http://localhost:8000 (or the port specified in your `.env` file)
+
+### Verifying the Installation
+
+You can verify the server is running by visiting:
+- Health check: http://localhost:8000/health
+- API documentation: http://localhost:8000/docs
 
 ## API Endpoints
 
